@@ -35,21 +35,58 @@ contract MiniAMM is IMiniAMM, IMiniAMMEvents {
 
     // add parameters and implement function.
     // this function will determine the initial 'k'.
-    function _addLiquidityFirstTime() internal {}
+    function _addLiquidityFirstTime(uint256 xAmountIn, uint256 yAmountIn) internal {
+        // Transfer tokens from user to contract
+        IERC20(tokenX).transferFrom(msg.sender, address(this), xAmountIn);
+        IERC20(tokenY).transferFrom(msg.sender, address(this), yAmountIn);
+        
+        // Update reserves
+        xReserve = xAmountIn;
+        yReserve = yAmountIn;
+        
+        // Calculate initial k
+        k = xAmountIn * yAmountIn;
+        
+        // Emit event
+        emit AddLiquidity(xAmountIn, yAmountIn);
+    }
 
     // add parameters and implement function.
     // this function will increase the 'k'
     // because it is transferring liquidity from users to this contract.
-    function _addLiquidityNotFirstTime() internal {}
+    function _addLiquidityNotFirstTime(uint256 xAmountIn, uint256 yAmountIn) internal {
+        // Calculate required y amount based on current ratio
+        uint256 yRequired = (xAmountIn * yReserve) / xReserve;
+        
+        // Check if provided y amount matches required amount
+        require(yAmountIn >= yRequired, "Insufficient y amount");
+        
+        // Transfer tokens from user to contract
+        IERC20(tokenX).transferFrom(msg.sender, address(this), xAmountIn);
+        IERC20(tokenY).transferFrom(msg.sender, address(this), yRequired);
+        
+        // Update reserves
+        xReserve += xAmountIn;
+        yReserve += yRequired;
+        
+        // Update k (k increases)
+        k = xReserve * yReserve;
+        
+        // Emit event
+        emit AddLiquidity(xAmountIn, yRequired);
+    }
 
     // complete the function
     function addLiquidity(uint256 xAmountIn, uint256 yAmountIn) external {
+        // Check for zero amounts
+        require(xAmountIn > 0 && yAmountIn > 0, "Amounts must be greater than 0");
+        
         if (k == 0) {
             // add params
-            _addLiquidityFirstTime();
+            _addLiquidityFirstTime(xAmountIn, yAmountIn);
         } else {
             // add params
-            _addLiquidityNotFirstTime();
+            _addLiquidityNotFirstTime(xAmountIn, yAmountIn);
         }
     }
 
