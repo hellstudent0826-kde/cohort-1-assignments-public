@@ -15,7 +15,23 @@ contract MiniAMM is IMiniAMM, IMiniAMMEvents {
     address public tokenY;
 
     // implement constructor
-    constructor(address _tokenX, address _tokenY) {}
+    constructor(address _tokenX, address _tokenY) {
+        // Check for zero addresses
+        if (_tokenX == address(0)) revert("tokenX cannot be zero address");
+        if (_tokenY == address(0)) revert("tokenY cannot be zero address");
+        
+        // Check for same tokens
+        if (_tokenX == _tokenY) revert("Tokens must be different");
+        
+        // Order tokens by address (smaller address becomes tokenX)
+        if (_tokenX < _tokenY) {
+            tokenX = _tokenX;
+            tokenY = _tokenY;
+        } else {
+            tokenX = _tokenY;
+            tokenY = _tokenX;
+        }
+    }
 
     // add parameters and implement function.
     // this function will determine the initial 'k'.
