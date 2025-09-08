@@ -14,8 +14,7 @@ services:
     networks:
       - geth-network
   sc-deployer:
-    image: ghcr.io/hell-month/foundry:latest
-    platform: linux/arm64
+    image: ghcr.io/foundry-rs/foundry:latest
     container_name: sc-deployer
     user: root
     volumes:
