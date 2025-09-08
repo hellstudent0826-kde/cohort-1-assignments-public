@@ -1,12 +1,35 @@
-:80 {
-    # CORS 설정
-    header {
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type, Authorization"
+{
+    auto_https off
+}
+
+(cors) {
+    @cors_preflight* method OPTIONS
+    @cors* header Origin *
+
+    handle @cors_preflight* {
+        header {
+            Access-Control-Allow-Origin "*"
+            Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            Access-Control-Allow-Headers *
+            Access-Control-Max-Age "3600"
+            defer # turn on defer on your header directive to make sure the new header values are set after proxying
+        }
+        respond "" 204
     }
 
-    # 배포 정보 (JSON 파일 직접 서빙)
+    handle @cors* {
+        header {
+            Access-Control-Allow-Origin "*"
+            Access-Control-Expose-Headers *
+            defer
+        }
+    }
+}
+
+:80 {
+    import cors
+    
+    # 배포 정보 (우리가 만든 JSON 직접 서빙)
     handle /deployment {
         header Content-Type "application/json"
         respond `{
@@ -34,29 +57,17 @@
     }
 }` 200
     }
-
-    # geth RPC 서비스 (루트 경로)
+    
+    handle /deployment.json {
+        reverse_proxy sc-deployment-server:80
+    }
+    
+    handle /rpc* {
+        uri strip_prefix /rpc
+        reverse_proxy geth:8545
+    }
+    
     handle {
-        reverse_proxy geth:8545 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
-    # Explorer (blockscout) - 나중에 추가
-    handle /explorer* {
-        reverse_proxy blockscout:4000
-    }
-
-    # Graph Playground - 나중에 추가
-    handle /graph-playground* {
-        reverse_proxy graph-node:8000
-    }
-
-    # 기본 응답
-    handle {
-        respond "1b Local Development Environment - Available endpoints: /rpc, /deployment, /explorer, /graph-playground" 200
+        reverse_proxy geth:8545
     }
 }

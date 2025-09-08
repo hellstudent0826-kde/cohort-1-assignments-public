@@ -12,20 +12,19 @@ until [ -f "/shared/geth-init-complete" ]; do
 done
 echo "✅ Prefunding completed, proceeding with deployment..."
 
-# Clone the repository
-echo "📥 Cloning repository..."
-if [ -d "cohort-1-assignments-public" ]; then
-    echo "Repository already exists, removing and re-cloning..."
-    rm -rf cohort-1-assignments-public
-fi
+# Clean up and clone repository fresh
+echo "🧹 Cleaning up previous repository..."
+rm -rf /workspace/cohort-1-assignments-public
 
-git clone --recursive https://github.com/Juyeong-Byeon/cohort-1-assignments-public.git
+cd /workspace
+
+echo "📥 Cloning repository..."
+git clone --recursive https://github.com/9oelm/cohort-1-assignments-public.git
 cd cohort-1-assignments-public/1a
 
 # Install dependencies
 echo "📦 Installing dependencies..."
-# Skip forge install since we already cloned with --recursive
-echo "✅ Dependencies already installed via recursive clone"
+forge install
 
 # Build the project
 echo "🔨 Building project..."
@@ -41,3 +40,10 @@ forge script script/MiniAMM.s.sol:MiniAMMScript \
 echo "✅ Deployment completed!"
 echo ""
 echo "📊 Contract addresses should be available in the broadcast logs above."
+
+# Extract contract addresses to deployment.json
+echo "📝 Extracting contract addresses..."
+cd /workspace
+node extract-addresses.js
+
+echo "✅ All done! Check deployment.json for contract addresses."
