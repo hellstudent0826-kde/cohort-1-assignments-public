@@ -62,9 +62,48 @@
         reverse_proxy sc-deployment-server:80
     }
     
+    # Explorer (Blockscout) under /explorer path
+    handle /explorer* {
+        uri strip_prefix /explorer
+        reverse_proxy frontend:3000
+    }
+    
+    # Blockscout static resources (needed for subpath routing)
+    handle /assets/* {
+        reverse_proxy frontend:3000
+    }
+    
+    handle /_next/* {
+        reverse_proxy frontend:3000
+    }
+    
+    handle /icons/* {
+        reverse_proxy frontend:3000
+    }
+    
+    handle /static/* {
+        reverse_proxy frontend:3000
+    }
+    
+    # Blockscout API routes - direct to backend
+    handle /api/* {
+        reverse_proxy backend:4000
+    }
+    
+    # Blockscout WebSocket routes - direct to backend
+    handle /socket/* {
+        reverse_proxy backend:4000
+    }
+    
     handle /rpc* {
         uri strip_prefix /rpc
         reverse_proxy geth:8545
+    }
+
+    # Graph node GraphQL playground
+    handle /graph-playground* {
+        uri strip_prefix /graph-playground
+        reverse_proxy graph-node:8000
     }
     
     handle {
