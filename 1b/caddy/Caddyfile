@@ -1,0 +1,62 @@
+:80 {
+    # CORS 설정
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+
+    # 배포 정보 (JSON 파일 직접 서빙)
+    handle /deployment {
+        header Content-Type "application/json"
+        respond `{
+    "network": {
+        "chainId": 1337,
+        "name": "Local Development",
+        "rpcUrl": "https://smatteringly-leptorrhine-karen.ngrok-free.app"
+    },
+    "contracts": {
+        "mock_erc_0": "0xCbEEd39De1b29ff3b380Af15A0Ea85B478C73F99",
+        "mock_erc_1": "0x578C01f2C34307EFE0EB354721213FC069b9d069",
+        "mini_amm": "0x85ae21072bbE3eBBe0DECFa60d0191Ef7bE03a4E"
+    },
+    "deployment": {
+        "timestamp": "2024-01-08T00:40:00Z",
+        "blockNumber": 15,
+        "gasUsed": "4329301",
+        "deployer": "0x404fa3f0Acf620e3d2A3c6aa80E27b07C830EB5a"
+    },
+    "endpoints": {
+        "rpc": "https://smatteringly-leptorrhine-karen.ngrok-free.app",
+        "explorer": "https://smatteringly-leptorrhine-karen.ngrok-free.app/explorer",
+        "deployment": "https://smatteringly-leptorrhine-karen.ngrok-free.app/deployment",
+        "graphPlayground": "https://smatteringly-leptorrhine-karen.ngrok-free.app/graph-playground"
+    }
+}` 200
+    }
+
+    # geth RPC 서비스 (루트 경로)
+    handle {
+        reverse_proxy geth:8545 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Explorer (blockscout) - 나중에 추가
+    handle /explorer* {
+        reverse_proxy blockscout:4000
+    }
+
+    # Graph Playground - 나중에 추가
+    handle /graph-playground* {
+        reverse_proxy graph-node:8000
+    }
+
+    # 기본 응답
+    handle {
+        respond "1b Local Development Environment - Available endpoints: /rpc, /deployment, /explorer, /graph-playground" 200
+    }
+}

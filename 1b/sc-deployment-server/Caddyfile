@@ -1,0 +1,20 @@
+:80 {
+    # CORS 설정
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+
+    # JSON 파일 서빙
+    handle /deployment {
+        respond /srv/deployment.json 200 {
+            header Content-Type "application/json"
+        }
+    }
+
+    # 기본 응답
+    handle {
+        respond "Smart Contract Deployment Server" 200
+    }
+}

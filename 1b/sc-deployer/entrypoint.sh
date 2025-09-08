@@ -15,20 +15,17 @@ echo "✅ Prefunding completed, proceeding with deployment..."
 # Clone the repository
 echo "📥 Cloning repository..."
 if [ -d "cohort-1-assignments-public" ]; then
-    echo "Repository already exists, pulling latest changes..."
-    cd cohort-1-assignments-public
-    git pull origin main
-else
-    git clone https://github.com/Juyeong-Byeon/cohort-1-assignments-public.git
-    cd cohort-1-assignments-public
+    echo "Repository already exists, removing and re-cloning..."
+    rm -rf cohort-1-assignments-public
 fi
 
-# Navigate to the 1a directory
-cd 1a
+git clone --recursive https://github.com/Juyeong-Byeon/cohort-1-assignments-public.git
+cd cohort-1-assignments-public/1a
 
 # Install dependencies
 echo "📦 Installing dependencies..."
-forge install
+# Skip forge install since we already cloned with --recursive
+echo "✅ Dependencies already installed via recursive clone"
 
 # Build the project
 echo "🔨 Building project..."
@@ -39,8 +36,7 @@ echo "🚀 Deploying MiniAMM contracts..."
 forge script script/MiniAMM.s.sol:MiniAMMScript \
     --rpc-url http://geth:8545 \
     --private-key be44593f36ac74d23ed0e80569b672ac08fa963ede14b63a967d92739b0c8659 \
-    --broadcast \
-    --verify
+    --broadcast
 
 echo "✅ Deployment completed!"
 echo ""

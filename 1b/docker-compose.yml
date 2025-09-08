@@ -1,7 +1,19 @@
 version: "3.8"
 
 services:
-  # caddy:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./sc-deployment-server:/srv
+    depends_on:
+      - geth
+    networks:
+      - geth-network
   # ngrok:
   sc-deployer:
   # Error invoking remote method 'docker-start-container': Error: (HTTP code 400) unexpected - failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: exec: "/bin/bash": stat /bin/bash: no such file or directory: unknown
@@ -17,7 +29,7 @@ services:
       - geth
     networks:
       - geth-network
-  # sc-deployment-server:
+  # sc-deployment-server: (제거됨 - 메인 Caddy에서 직접 처리)
   geth:
     image: ethereum/client-go:v1.15.0
     container_name: geth
