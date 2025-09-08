@@ -1,13 +1,22 @@
 version: "3.8"
 
 services:
-  # caddy:
-  # ngrok:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: caddy
+    ports:
+      - "8080:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - geth
+    networks:
+      - geth-network
   sc-deployer:
-  # Error invoking remote method 'docker-start-container': Error: (HTTP code 400) unexpected - failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: exec: "/bin/bash": stat /bin/bash: no such file or directory: unknown
-    image: ghcr.io/foundry-rs/foundry:latest
-    platform: linux/amd64
+    image: ghcr.io/hell-month/foundry:latest
+    platform: linux/arm64
     container_name: sc-deployer
+    user: root
     volumes:
       - ./sc-deployer:/workspace
       - ./geth-init:/shared
@@ -17,7 +26,19 @@ services:
       - geth
     networks:
       - geth-network
-  # sc-deployment-server:
+  sc-deployment-server:
+    image: caddy:2.7-alpine
+    container_name: sc-deployment-server
+    ports:
+      - "8081:80"
+    volumes:
+      - ./sc-deployment-server/Caddyfile:/etc/caddy/Caddyfile
+      # serve deployment.json
+      - ./sc-deployer:/usr/share/caddy
+    depends_on:
+      - sc-deployer
+    networks:
+      - geth-network
   geth:
     image: ethereum/client-go:v1.15.0
     container_name: geth
