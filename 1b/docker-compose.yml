@@ -85,15 +85,75 @@ services:
       - geth
     networks:
       - geth-network
-  # graph-ipfs:
-  # graph-postgres:
-  # graph-redis:
-  # graph-node:
+  graph-ipfs:
+    image: ipfs/go-ipfs:v0.14.0
+    container_name: graph-ipfs
+    ports:
+      - "5001:5001"  # IPFS API
+      - "4001:4001"  # IPFS Gateway
+    volumes:
+      - ipfs-data:/data/ipfs
+    command: ["daemon", "--migrate=true", "--agent-version-suffix=docker"]
+    networks:
+      - geth-network
+
+  graph-postgres:
+    image: postgres:13
+    container_name: graph-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - geth-network
+
+  graph-redis:
+    image: redis:6-alpine
+    container_name: graph-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - geth-network
+
+  graph-node:
+    image: graphprotocol/graph-node:latest
+    container_name: graph-node
+    ports:
+      - "8000:8000"  # GraphQL HTTP server
+      - "8001:8001"  # GraphQL WebSocket server
+      - "8020:8020"  # JSON-RPC admin server
+      - "8030:8030"  # Subgraph index status server
+      - "8040:8040"  # Metrics server
+    environment:
+      postgres_host: graph-postgres
+      postgres_user: graph-node
+      postgres_pass: let-me-in
+      postgres_db: graph-node
+      ipfs: graph-ipfs:5001
+      ethereum: 'geth:http://geth:8545'
+      GRAPH_LOG: info
+    depends_on:
+      - graph-ipfs
+      - graph-postgres
+      - graph-redis
+      - geth
+    networks:
+      - geth-network
 
   # blockscout: should be another docker-compose.yml file from https://github.com/blockscout/blockscout/tree/master/docker-compose. Don't create a container in this file.
 
 volumes:
   geth-data:
+  ipfs-data:
+  postgres-data:
+  redis-data:
 
 networks:
   geth-network:

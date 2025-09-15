@@ -12,15 +12,9 @@ until [ -f "/shared/geth-init-complete" ]; do
 done
 echo "✅ Prefunding completed, proceeding with deployment..."
 
-# Clean up and clone repository fresh
-echo "🧹 Cleaning up previous repository..."
-rm -rf /workspace/cohort-1-assignments-public
-
-cd /workspace
-
-echo "📥 Cloning repository..."
-git clone --recursive https://github.com/9oelm/cohort-1-assignments-public.git
-cd cohort-1-assignments-public/1a
+# Use local 1a project instead of cloning
+echo "📁 Using local 1a project..."
+cd /workspace/cohort-1-assignments-public/1a
 
 # Install dependencies
 echo "📦 Installing dependencies..."
