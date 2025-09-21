@@ -85,11 +85,22 @@
 
 ## 🚀 배포 결과 (FLR Coston2 테스트넷)
 
-### 배포된 컨트랙트 주소들 (최종)
+### 첫 번째 배포 (기본 배포)
 - **MiniAMMFactory**: `0xd6239f84a7de6354f6eA239ed8742eA825355715`
 - **Token Alpha (TKA)**: `0xc5f8a7e9fA5277F91ab876A6617E035f6B37ddE1`
 - **Token Beta (TKB)**: `0x31Cbb27Bb2591A57e2a2642a5B332e8E9cc75588`
 - **MiniAMM Pair**: `0x2c2a41Cd3c570Eb186236Ef2C6E49E480fF7F747`
+
+### 두 번째 배포 (검증 시도)
+- **MiniAMMFactory**: `0x8F356f1E66E299cdA68cAc72726dF298e5A9e346`
+- **Token Alpha (TKA)**: `0x929C2F067C4920392F576F98A1D5516a19744Dd5`
+- **Token Beta (TKB)**: `0x68871dEE36Ce53c519E47bf9fd464081a92c253e`
+- **MiniAMM Pair**: `0xAd1e95D99348aEA80a4282eB88dC6e5e80d69f76`
+
+### 크로스 시스템 페어 (첫 번째 팩토리로 생성)
+- **크로스 페어**: `0x88eab613af8347baba440c1a2be16bf5355fbfbd`
+- **Token X**: `0x68871dEE36Ce53c519E47bf9fd464081a92c253e` (두 번째 시스템의 Token Beta)
+- **Token Y**: `0xc5f8a7e9fA5277F91ab876A6617E035f6B37ddE1` (첫 번째 시스템의 Token Alpha)
 
 ### 네트워크 정보
 - **체인**: FLR Coston2 테스트넷 (Chain ID: 114)
