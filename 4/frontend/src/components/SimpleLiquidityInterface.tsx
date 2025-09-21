@@ -170,38 +170,40 @@ export function SimpleLiquidityInterface({
 
       // Step 1: Approve Token A
       console.log('🔐 Approving Token A...');
-      writeContract({
+      const approveAResult = await writeContract({
         address: tokenXAddress as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [miniAMMAddress as `0x${string}`, amountAWei]
       });
+      console.log('✅ Token A approval result:', approveAResult);
 
       // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Step 2: Approve Token B
       console.log('🔐 Approving Token B...');
-      writeContract({
+      const approveBResult = await writeContract({
         address: tokenYAddress as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [miniAMMAddress as `0x${string}`, amountBWei]
       });
+      console.log('✅ Token B approval result:', approveBResult);
 
       // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Step 3: Add liquidity
       console.log('💧 Adding liquidity...');
-      const result = writeContract({
+      const addLiquidityResult = await writeContract({
         address: miniAMMAddress as `0x${string}`,
         abi: MINI_AMM_ABI,
         functionName: 'addLiquidity',
         args: [amountAWei, amountBWei]
       });
 
-      console.log('📝 Write contract result:', result);
+      console.log('✅ Add liquidity result:', addLiquidityResult);
 
       // Clear inputs
       setAmountA('');
@@ -249,24 +251,26 @@ export function SimpleLiquidityInterface({
 
       // Step 1: Approve LP tokens
       console.log('🔐 Approving LP tokens...');
-      writeContract({
+      const approveLPResult = await writeContract({
         address: lpTokenAddress as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [miniAMMAddress as `0x${string}`, removeAmountWei]
       });
+      console.log('✅ LP token approval result:', approveLPResult);
 
       // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Step 2: Remove liquidity
       console.log('🔥 Removing liquidity...');
-      writeContract({
+      const removeLiquidityResult = await writeContract({
         address: miniAMMAddress as `0x${string}`,
         abi: MINI_AMM_ABI,
         functionName: 'removeLiquidity',
         args: [removeAmountWei]
       });
+      console.log('✅ Remove liquidity result:', removeLiquidityResult);
 
       // Clear input
       setRemoveAmount('');
