@@ -53,29 +53,6 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
     }
   });
   
-  // 상세한 디버그 로깅
-  useEffect(() => {
-    console.log('🔍 Transaction Status:', { 
-      isMinting, 
-      mintTxHash: mintTxHash ? `${mintTxHash.slice(0, 10)}...` : 'None',
-      isConfirmed, 
-      receiptError: receiptError ? 'Yes' : 'No',
-      hasReceipt: !!receipt
-    });
-    
-    if (mintTxHash) {
-      console.log('📡 Checking transaction on blockchain...');
-    }
-    
-    if (isConfirmed) {
-      console.log('✅ Transaction confirmed on blockchain!');
-      console.log('📋 Receipt:', receipt);
-    }
-    
-    if (receiptError) {
-      console.log('❌ Transaction failed:', receiptError);
-    }
-  }, [isMinting, mintTxHash, isConfirmed, receiptError, receipt]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -134,7 +111,6 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
   // 트랜잭션 확인 후 갱신
   useEffect(() => {
     if (isConfirmed && receipt) {
-      console.log('Transaction confirmed, refetching balances...');
       refetchTokenA();
       refetchTokenB();
       setIsMinting(false);
@@ -154,10 +130,8 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
   }, [receiptError]);
 
   const handleMint = async (tokenAddress: string, amount: string) => {
-    console.log('Minting started:', { tokenAddress, amount, isConnected });
     
     if (!isConnected) {
-      console.log('Wallet not connected');
       alert('Please connect your wallet first');
       return;
     }
@@ -172,8 +146,6 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
     try {
       // 정수 입력을 18자리 소수점으로 변환
       const amountWei = BigInt(Math.floor(amountNum * 1e18));
-      console.log('Minting with amountWei:', amountWei.toString());
-      console.log('Input amount:', amountNum, '→ Wei:', amountWei.toString());
       
       const result = await writeMint({
         address: tokenAddress as `0x${string}`,
@@ -182,7 +154,6 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
         args: [amountWei]
       });
       
-      console.log('Minting transaction sent:', result);
       
       // 트랜잭션 해시 저장 (useWaitForTransactionReceipt가 처리)
       if (typeof result === 'string') {
@@ -190,7 +161,6 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
       } else {
         // 트랜잭션 해시를 받지 못한 경우 즉시 리셋
         setIsMinting(false);
-        alert('⚠️ Transaction sent but no hash received');
       }
       
     } catch (error: unknown) {
@@ -244,17 +214,12 @@ export function TokenBalance({ tokenXAddress, tokenYAddress }: TokenBalanceProps
       });
       
       const data = await response.json();
-      console.log('🔍 Manual check result:', data);
-      
       if (data.result) {
-        console.log('✅ Transaction found on blockchain!');
         refetchTokenA();
         refetchTokenB();
         setIsMinting(false);
         setMintTxHash(null);
         alert('✅ Transaction confirmed! Balance updated.');
-      } else {
-        console.log('⏳ Transaction still pending...');
       }
     } catch (error) {
       console.error('❌ Manual check failed:', error);

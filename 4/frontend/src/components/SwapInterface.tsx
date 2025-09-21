@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 
 interface SwapInterfaceProps {
   miniAMMAddress: string;
@@ -16,6 +16,13 @@ const MINI_AMM_ABI = [
     "name": "swap",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getReserves",
+    "outputs": [{"name": "xReserve", "type": "uint256"}, {"name": "yReserve", "type": "uint256"}],
+    "stateMutability": "view",
     "type": "function"
   }
 ] as const;
@@ -46,10 +53,31 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
   const [isMounted, setIsMounted] = useState(false);
   const [estimatedOutput, setEstimatedOutput] = useState<string>('');
   const [feeAmount, setFeeAmount] = useState<string>('');
+  const [lastUpdate, setLastUpdate] = useState<string>('');
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // 풀 데이터 조회 (실시간 갱신)
+  const { data: reserves } = useReadContract({
+    address: miniAMMAddress as `0x${string}`,
+    abi: MINI_AMM_ABI,
+    functionName: 'getReserves',
+    enabled: !!miniAMMAddress,
+    refetchInterval: 2000, // 2초마다 갱신
+  });
+
+  const { writeContract: writeSwap, isPending: isSwapPending, isSuccess: isSwapSuccess } = useWriteContract();
+  const { writeContract: writeApprove, isPending: isApprovePending, isSuccess: isApproveSuccess } = useWriteContract();
+
+  // 갱신 확인을 위한 로그
+  useEffect(() => {
+    if (reserves) {
+      const now = new Date().toLocaleTimeString();
+      setLastUpdate(now);
+    }
+  }, [reserves]);
 
   // 수수료 계산 및 예상 출력량 계산
   useEffect(() => {
@@ -60,17 +88,41 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
       
       setFeeAmount(fee.toFixed(6));
       
-      // 간단한 1:1 비율 가정 (실제로는 풀의 현재 비율에 따라 달라짐)
-      // 실제 구현에서는 풀의 reserves를 확인해서 정확한 계산을 해야 함
-      setEstimatedOutput(effectiveInput.toFixed(6));
+      // 실제 풀의 비율에 따른 정확한 계산
+      if (reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n) {
+        const inputAmountWei = BigInt(Math.floor(effectiveInput * 1e18));
+        
+        if (swapDirection === 'AtoB') {
+          // Token A → Token B: xReserve, yReserve
+          const xReserve = reserves[0];
+          const yReserve = reserves[1];
+          const expectedOutput = (inputAmountWei * yReserve) / xReserve;
+          setEstimatedOutput((Number(expectedOutput) / 1e18).toFixed(6));
+        } else {
+          // Token B → Token A: yReserve, xReserve
+          const yReserve = reserves[1];
+          const xReserve = reserves[0];
+          const expectedOutput = (inputAmountWei * xReserve) / yReserve;
+          setEstimatedOutput((Number(expectedOutput) / 1e18).toFixed(6));
+        }
+      } else {
+        // 풀에 유동성이 없거나 데이터가 없는 경우 1:1 비율로 가정
+        setEstimatedOutput(effectiveInput.toFixed(6));
+      }
     } else {
       setEstimatedOutput('');
       setFeeAmount('');
     }
-  }, [amount, swapDirection]);
+  }, [amount, swapDirection, reserves]);
 
-  const { writeContract: writeSwap } = useWriteContract();
-  const { writeContract: writeApprove } = useWriteContract();
+  // 성공 시 입력값 초기화
+  useEffect(() => {
+    if (isSwapSuccess) {
+      setAmount('');
+      setEstimatedOutput('');
+      setFeeAmount('');
+    }
+  }, [isSwapSuccess]);
 
   const handleSwap = async () => {
     if (!isConnected || !amount) return;
@@ -160,6 +212,28 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
           className="w-full p-3 text-lg text-gray-900 font-semibold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
         />
         
+        {/* 현재 교환비 정보 */}
+        {reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="text-sm text-green-800">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold">💱 Current Exchange Rate:</span>
+                <span className="font-mono text-lg">
+                  {swapDirection === 'AtoB' 
+                    ? `1 A = ${(Number(reserves[1]) / Number(reserves[0])).toFixed(4)} B`
+                    : `1 B = ${(Number(reserves[0]) / Number(reserves[1])).toFixed(4)} A`
+                  }
+                </span>
+              </div>
+              {lastUpdate && (
+                <div className="text-xs text-gray-500 mt-1">
+                  🕐 Updated: {lastUpdate}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 수수료 및 예상 출력량 정보 */}
         {amount && parseFloat(amount) > 0 && (
           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -182,8 +256,8 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
                 </div>
                 <div className="pt-2 border-t border-blue-300">
                   <div className="flex justify-between text-xs text-blue-600">
-                    <span>💡 Why not 1:1?</span>
-                    <span>0.3% swap fee applied</span>
+                    <span>💡 Note:</span>
+                    <span>{reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n ? 'Using actual pool ratio' : '1:1 ratio assumed (no liquidity)'}</span>
                   </div>
                 </div>
               </div>
@@ -194,10 +268,10 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
 
       <button
         onClick={handleSwap}
-        disabled={!amount || isLoading}
+        disabled={!amount || isLoading || isSwapPending || isApprovePending}
         className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-lg text-lg font-bold hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all duration-200"
       >
-        {isLoading ? 'Swapping...' : 'Swap Tokens'}
+        {isLoading || isSwapPending || isApprovePending ? 'Swapping...' : 'Swap Tokens'}
       </button>
 
       {miniAMMAddress === "0x0000000000000000000000000000000000000000" && (
