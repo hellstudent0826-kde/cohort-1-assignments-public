@@ -64,8 +64,9 @@ export function SimpleLiquidityInterface({
   tokenXAddress, 
   tokenYAddress 
 }: SimpleLiquidityInterfaceProps) {
-  const [amountA, setAmountA] = useState('');
-  const [amountB, setAmountB] = useState('');
+  // 슬라이드 기반으로 변경되어 직접 입력은 사용하지 않음
+  // const [amountA, setAmountA] = useState('');
+  // const [amountB, setAmountB] = useState('');
   const [liquidityPercentage, setLiquidityPercentage] = useState(0); // 0-100%
   const [removalPercentage, setRemovalPercentage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -78,7 +79,6 @@ export function SimpleLiquidityInterface({
   // 트랜잭션 상태 확인
   const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash as `0x${string}`,
-    enabled: !!txHash,
   });
 
   // Hydration mismatch 방지
@@ -101,7 +101,6 @@ export function SimpleLiquidityInterface({
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address!],
-    enabled: !!address,
   });
 
   const { data: balanceB, refetch: refetchBalanceB } = useReadContract({
@@ -109,7 +108,6 @@ export function SimpleLiquidityInterface({
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address!],
-    enabled: !!address,
   });
 
   // Get LP token balance
@@ -118,7 +116,6 @@ export function SimpleLiquidityInterface({
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [address!],
-    enabled: !!address && !!lpTokenAddress,
   });
 
   // 자동 갱신 (3초마다)
@@ -145,8 +142,6 @@ export function SimpleLiquidityInterface({
       }, 1000); // 1초 후 갱신
       
       // 입력값 초기화
-      setAmountA('');
-      setAmountB('');
       setRemovalPercentage(0);
       
       setTxHash(null); // 리셋
@@ -174,7 +169,7 @@ export function SimpleLiquidityInterface({
       
       // Token B 양은 현재 풀 비율에 따라 계산
       let addAmountBWei: bigint;
-      if (reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n) {
+      if (reserves && reserves.length >= 2 && reserves[0] > BigInt(0) && reserves[1] > BigInt(0)) {
         addAmountBWei = (addAmountAWei * reserves[1]) / reserves[0];
       } else {
         // 첫 번째 유동성 추가인 경우 1:1 비율로 가정
@@ -256,7 +251,7 @@ export function SimpleLiquidityInterface({
 
     try {
       // 퍼센트 기반으로 제거할 양 계산
-      if (!lpBalance || lpBalance === 0n) {
+      if (!lpBalance || lpBalance === BigInt(0)) {
         alert('제거할 LP 토큰이 없습니다');
         return;
       }
@@ -267,7 +262,7 @@ export function SimpleLiquidityInterface({
       }
       
       // 퍼센트에 따른 제거할 양 계산
-      const removeAmountWei = (lpBalance * BigInt(removalPercentage)) / 100n;
+      const removeAmountWei = (lpBalance * BigInt(removalPercentage)) / BigInt(100);
 
       // Step 1: Approve LP tokens
       writeContract({
@@ -405,7 +400,7 @@ export function SimpleLiquidityInterface({
           </div>
 
           {/* 계산된 토큰 양 표시 */}
-          {liquidityPercentage > 0 && balanceA && balanceB && reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n && (
+          {liquidityPercentage > 0 && balanceA && balanceB && reserves && reserves.length >= 2 && reserves[0] > BigInt(0) && reserves[1] > BigInt(0) && (
             <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
               <div className="text-sm text-green-800">
                 <div className="font-semibold mb-2">💧 추가될 유동성:</div>
@@ -504,7 +499,7 @@ export function SimpleLiquidityInterface({
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm text-gray-600">제거할 LP 토큰</span>
                 <span className="font-mono text-sm text-gray-900">
-                  {lpBalance ? formatBalance((lpBalance * BigInt(removalPercentage)) / 100n) : '0'} LP
+                  {lpBalance ? formatBalance((lpBalance * BigInt(removalPercentage)) / BigInt(100)) : '0'} LP
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs text-gray-500">

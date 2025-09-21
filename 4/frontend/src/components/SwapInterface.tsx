@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
+import { useAccount, useWriteContract, useReadContract } from 'wagmi';
 
 interface SwapInterfaceProps {
   miniAMMAddress: string;
@@ -46,7 +46,7 @@ const ERC20_ABI = [
 ] as const;
 
 export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: SwapInterfaceProps) {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const [swapDirection, setSwapDirection] = useState<'AtoB' | 'BtoA'>('AtoB');
   const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -64,12 +64,10 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
     address: miniAMMAddress as `0x${string}`,
     abi: MINI_AMM_ABI,
     functionName: 'getReserves',
-    enabled: !!miniAMMAddress,
-    refetchInterval: 2000, // 2초마다 갱신
   });
 
   const { writeContract: writeSwap, isPending: isSwapPending, isSuccess: isSwapSuccess } = useWriteContract();
-  const { writeContract: writeApprove, isPending: isApprovePending, isSuccess: isApproveSuccess } = useWriteContract();
+  const { writeContract: writeApprove, isPending: isApprovePending } = useWriteContract();
 
   // 갱신 확인을 위한 로그
   useEffect(() => {
@@ -89,7 +87,7 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
       setFeeAmount(fee.toFixed(6));
       
       // 실제 풀의 비율에 따른 정확한 계산
-      if (reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n) {
+      if (reserves && reserves.length >= 2 && reserves[0] > BigInt(0) && reserves[1] > BigInt(0)) {
         const inputAmountWei = BigInt(Math.floor(effectiveInput * 1e18));
         
         if (swapDirection === 'AtoB') {
@@ -150,14 +148,14 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
           address: ammContract,
           abi: MINI_AMM_ABI,
           functionName: 'swap',
-          args: [amountWei, 0n]
+          args: [amountWei, BigInt(0)]
         });
       } else {
         await writeSwap({
           address: ammContract,
           abi: MINI_AMM_ABI,
           functionName: 'swap',
-          args: [0n, amountWei]
+          args: [BigInt(0), amountWei]
         });
       }
     } catch (error) {
@@ -213,7 +211,7 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
         />
         
         {/* 현재 교환비 정보 */}
-        {reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n && (
+        {reserves && reserves.length >= 2 && reserves[0] > BigInt(0) && reserves[1] > BigInt(0) && (
           <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
             <div className="text-sm text-green-800">
               <div className="flex justify-between items-center">
@@ -257,7 +255,7 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
                 <div className="pt-2 border-t border-blue-300">
                   <div className="flex justify-between text-xs text-blue-600">
                     <span>💡 Note:</span>
-                    <span>{reserves && reserves.length >= 2 && reserves[0] > 0n && reserves[1] > 0n ? 'Using actual pool ratio' : '1:1 ratio assumed (no liquidity)'}</span>
+                    <span>{reserves && reserves.length >= 2 && reserves[0] > BigInt(0) && reserves[1] > BigInt(0) ? 'Using actual pool ratio' : '1:1 ratio assumed (no liquidity)'}</span>
                   </div>
                 </div>
               </div>
