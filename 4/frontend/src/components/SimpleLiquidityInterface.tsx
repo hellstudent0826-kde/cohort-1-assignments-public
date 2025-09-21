@@ -142,27 +142,28 @@ export function SimpleLiquidityInterface({
       const isFirstTime = !reserves || reserves.length < 2 || (reserves[0] === 0n && reserves[1] === 0n);
 
       if (!isFirstTime && reserves && reserves.length >= 2) {
-        // Check ratio with more tolerance
+        // Check ratio with very strict tolerance (컨트랙트는 1 wei만 허용)
         const xReserve = reserves[0];
         const yReserve = reserves[1];
         const expectedB = (amountAWei * yReserve) / xReserve;
-        const tolerance = expectedB / 10n; // 10% tolerance (더 관대하게)
+        const tolerance = 1n; // 1 wei tolerance (컨트랙트와 동일)
         const diff = expectedB > amountBWei ? expectedB - amountBWei : amountBWei - expectedB;
         
-        console.log('🔍 비율 검증:', {
+        console.log('🔍 비율 검증 (엄격):', {
           amountA: Number(amountAWei) / 1e18,
           amountB: Number(amountBWei) / 1e18,
           xReserve: Number(xReserve) / 1e18,
           yReserve: Number(yReserve) / 1e18,
           expectedB: Number(expectedB) / 1e18,
           tolerance: Number(tolerance) / 1e18,
-          diff: Number(diff) / 1e18
+          diff: Number(diff) / 1e18,
+          isExact: diff <= tolerance
         });
         
         if (diff > tolerance) {
           const expectedBFormatted = Number(expectedB) / 1e18;
           const actualBFormatted = Number(amountBWei) / 1e18;
-          alert(`비율이 맞지 않습니다. Token B는 약 ${expectedBFormatted.toFixed(6)}개가 필요합니다. (입력: ${actualBFormatted.toFixed(6)})`);
+          alert(`정확한 비율이 필요합니다! Token B는 정확히 ${expectedBFormatted.toFixed(18)}개가 필요합니다. (입력: ${actualBFormatted.toFixed(18)})`);
           return;
         }
       }
@@ -193,18 +194,20 @@ export function SimpleLiquidityInterface({
 
       // Step 3: Add liquidity
       console.log('💧 Adding liquidity...');
-      writeContract({
+      const result = writeContract({
         address: miniAMMAddress as `0x${string}`,
         abi: MINI_AMM_ABI,
         functionName: 'addLiquidity',
         args: [amountAWei, amountBWei]
       });
 
+      console.log('📝 Write contract result:', result);
+
       // Clear inputs
       setAmountA('');
       setAmountB('');
       
-      alert('유동성 추가 트랜잭션이 전송되었습니다!');
+      alert('유동성 추가 트랜잭션이 전송되었습니다! 트랜잭션 해시를 확인하세요.');
 
     } catch (error) {
       console.error('❌ Add liquidity failed:', error);
@@ -336,14 +339,14 @@ export function SimpleLiquidityInterface({
           {amountA && parseFloat(amountA) > 0 && reserves && reserves.length >= 2 && reserves[0] !== 0n && reserves[1] !== 0n && (
             <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
               <p className="text-blue-800">
-                💡 권장 비율: Token A {amountA}개 → Token B {((parseFloat(amountA) * Number(reserves[1]) / Number(reserves[0]))).toFixed(6)}개
+                💡 정확한 비율: Token A {amountA}개 → Token B {((parseFloat(amountA) * Number(reserves[1]) / Number(reserves[0]))).toFixed(18)}개
               </p>
               <button
                 type="button"
-                onClick={() => setAmountB(((parseFloat(amountA) * Number(reserves[1]) / Number(reserves[0]))).toFixed(6))}
+                onClick={() => setAmountB(((parseFloat(amountA) * Number(reserves[1]) / Number(reserves[0]))).toFixed(18))}
                 className="mt-1 text-blue-600 hover:text-blue-800 underline text-xs"
               >
-                권장 비율로 설정
+                정확한 비율로 설정
               </button>
             </div>
           )}
