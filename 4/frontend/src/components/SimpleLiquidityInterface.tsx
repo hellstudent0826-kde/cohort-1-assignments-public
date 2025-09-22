@@ -227,37 +227,48 @@ export function SimpleLiquidityInterface({
       }
 
       // Step 1: Approve Token A
-      writeContract({
-        address: tokenXAddress as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [miniAMMAddress as `0x${string}`, addAmountAWei]
-      }, {
-        onSuccess: (hash) => {
-          setTxHash(hash);
-        },
-        onError: (error) => {
-          alert(`Token A 승인 실패: ${error.message}`);
-        }
+      const approveAHash = await new Promise<string>((resolve, reject) => {
+        writeContract({
+          address: tokenXAddress as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [miniAMMAddress as `0x${string}`, addAmountAWei]
+        }, {
+          onSuccess: (hash) => {
+            setTxHash(hash);
+            resolve(hash);
+          },
+          onError: (error) => {
+            alert(`Token A 승인 실패: ${error.message}`);
+            reject(error);
+          }
+        });
       });
 
-      // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for Token A approval to be confirmed
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Step 2: Approve Token B
-      writeContract({
-        address: tokenYAddress as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [miniAMMAddress as `0x${string}`, addAmountBWei]
-      }, {
-        onError: (error) => {
-          alert(`Token B 승인 실패: ${error.message}`);
-        }
+      const approveBHash = await new Promise<string>((resolve, reject) => {
+        writeContract({
+          address: tokenYAddress as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [miniAMMAddress as `0x${string}`, addAmountBWei]
+        }, {
+          onSuccess: (hash) => {
+            setTxHash(hash);
+            resolve(hash);
+          },
+          onError: (error) => {
+            alert(`Token B 승인 실패: ${error.message}`);
+            reject(error);
+          }
+        });
       });
 
-      // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for Token B approval to be confirmed
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Step 3: Add liquidity
       writeContract({
