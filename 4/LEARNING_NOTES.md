@@ -314,6 +314,154 @@ const flareCoston2 = {
 
 ---
 
+## 📅 2025-09-28 작업 내용
+
+### 🎯 오늘의 목표
+- 유동성 공급 UI 개선 (최초 vs 기존 유동성 구분)
+- 승인 과정 개선 (실제 승인 완료 대기)
+- 스왑 인터페이스 개선 (에러 처리 강화)
+
+### 🔧 주요 작업 내용
+
+#### 1. 유동성 공급 UI 개선 ✅
+**문제**: 기존 슬라이더 방식으로는 최초 유동성 공급 시 사용자가 비율을 지정할 수 없음
+
+**해결책**:
+- **최초 유동성 공급 모드**: 사용자가 직접 Token A, B 양 입력
+- **기존 유동성 추가 모드**: 슬라이더로 비율 기반 자동 계산
+- **자동 모드 전환**: 유동성 존재 여부에 따라 적절한 모드 제안
+
+**구현 세부사항**:
+```typescript
+// 모드 상태 관리
+const [liquidityMode, setLiquidityMode] = useState<'initial' | 'additional'>('initial');
+const [amountA, setAmountA] = useState('');
+const [amountB, setAmountB] = useState('');
+
+// 유동성 존재 여부 확인
+const hasLiquidity = reserves && reserves.length >= 2 && reserves[0] > BigInt(0) && reserves[1] > BigInt(0);
+
+// 자동 모드 전환
+useEffect(() => {
+  if (hasLiquidity && liquidityMode === 'initial') {
+    setLiquidityMode('additional');
+  } else if (!hasLiquidity && liquidityMode === 'additional') {
+    setLiquidityMode('initial');
+  }
+}, [hasLiquidity, liquidityMode]);
+```
+
+#### 2. 승인 과정 개선 ✅
+**문제**: `allowance 0` 에러 발생 - 승인 트랜잭션이 완료되기 전에 유동성 추가 실행
+
+**해결책**:
+- **실제 승인 완료 대기**: `useWaitForTransactionReceipt` 사용
+- **비동기 처리**: 승인 완료 후 자동으로 유동성 추가 실행
+- **상태 기반 실행**: `receiptA && receiptB` 확인 후 실행
+
+**구현 세부사항**:
+```typescript
+// 승인 트랜잭션 완료 확인
+const { data: receiptA, isLoading: isApprovingA } = useWaitForTransactionReceipt({
+  hash: approveAHash as `0x${string}`,
+});
+
+const { data: receiptB, isLoading: isApprovingB } = useWaitForTransactionReceipt({
+  hash: approveBHash as `0x${string}`,
+});
+
+// 승인 완료 후 자동 실행
+useEffect(() => {
+  if (receiptA && receiptB && pendingLiquidityAmounts && !isLoading) {
+    addLiquidityAfterApproval();
+  }
+}, [receiptA, receiptB, pendingLiquidityAmounts, isLoading, addLiquidityAfterApproval]);
+```
+
+#### 3. 스왑 인터페이스 개선 ✅
+**문제**: 스왑에서도 동일한 `allowance 0` 에러 발생
+
+**해결책**:
+- **잔액/유동성 부족 에러 처리**: 명확한 에러 메시지 제공
+- **승인 완료 후 자동 스왑**: 유동성 추가와 동일한 패턴 적용
+- **실시간 상태 표시**: "승인 중...", "승인 완료 대기 중...", "스왑 중..."
+
+**구현 세부사항**:
+```typescript
+// 잔액 확인
+if (!balance || balance < amountWei) {
+  alert(`잔액이 부족합니다. 현재 잔액: ${balance ? (Number(balance) / 1e18).toFixed(6) : '0'}개`);
+  return;
+}
+
+// 유동성 확인
+if (!reserves || reserves.length < 2 || reserves[0] === BigInt(0) || reserves[1] === BigInt(0)) {
+  alert('유동성이 부족합니다. 먼저 유동성을 공급해주세요.');
+  return;
+}
+```
+
+#### 4. UI/UX 개선 ✅
+**탭 UI 개선**:
+- **시각적 구분**: 흰색 배경, 테두리, 그림자로 탭 영역 구분
+- **색상 변경**: 보라색 → 회색으로 변경 (액션 버튼과 구분)
+- **상태 표시**: 권장 모드에 대한 시각적 피드백
+
+**버튼 상태 관리**:
+- **실시간 상태 표시**: 각 단계별 명확한 상태 메시지
+- **적절한 비활성화**: 중복 클릭 방지 및 사용자 경험 개선
+
+#### 5. 사용자 유동성 표시 시도 및 롤백 ⚠️
+**시도**: 사용자가 제공한 유동성과 전체 유동성을 구분해서 표시
+
+**문제점**:
+- LP 토큰 총 공급량 조회 오류
+- BigInt → Number 변환 시 정밀도 손실
+- 복잡한 계산 로직으로 인한 불안정성
+
+**결과**: 복잡한 계산 로직 제거하고 원래 상태로 롤백
+
+### 🚀 기술적 학습 포인트
+
+#### 1. `useWaitForTransactionReceipt` 활용
+- **폴링 방식**: 1초마다 블록체인에 트랜잭션 상태 확인
+- **완료 감지**: `receipt` 데이터로 트랜잭션 완료 확인
+- **비동기 처리**: 트랜잭션 완료 후 다음 단계 자동 실행
+
+#### 2. React Hooks 패턴
+- **useState**: 컴포넌트 상태 관리
+- **useEffect**: 사이드 이펙트 처리 (자동 갱신, 트랜잭션 감지)
+- **useCallback**: 함수 메모이제이션으로 성능 최적화
+
+#### 3. BigInt 정밀도 문제
+- **JavaScript Number 한계**: 2^53 이상의 정수는 정확하게 표현 불가
+- **BigInt 연산**: 정확한 계산을 위해 BigInt 사용
+- **스케일링**: 소수점 계산을 위한 10000배 스케일링
+
+#### 4. 에러 처리 패턴
+- **사전 검증**: 트랜잭션 전송 전 잔액/유동성 확인
+- **명확한 메시지**: 사용자에게 구체적인 에러 정보 제공
+- **복구 가능한 에러**: 사용자가 수정 가능한 에러와 시스템 에러 구분
+
+### 📊 성과 및 개선사항
+
+#### ✅ 성공한 개선사항
+1. **유동성 공급 UX**: 최초/기존 유동성 구분으로 사용자 편의성 향상
+2. **승인 과정 안정화**: `allowance 0` 에러 완전 해결
+3. **에러 처리 강화**: 명확한 에러 메시지로 사용자 경험 개선
+4. **UI 일관성**: 탭 디자인과 상태 표시 개선
+
+#### ⚠️ 시도했지만 롤백한 기능
+1. **사용자 유동성 표시**: 복잡한 계산 로직으로 인한 불안정성
+2. **자동 갱신 최적화**: 타이밍 문제로 인한 복잡성 증가
+
+#### 🎯 핵심 학습
+- **단순함의 가치**: 복잡한 기능보다 안정적인 기본 기능이 중요
+- **점진적 개선**: 작은 단위로 개선하고 테스트하는 것이 효과적
+- **사용자 중심**: 기술적 완성도보다 사용자 경험이 우선
+
+---
+
 **🎉 Assignment 4 완료!**  
 완전한 MiniAMM DApp이 Flare Coston2에서 실행 중입니다!
 지갑 연결 성공! 이제 토큰 스왑과 유동성 관리 기능을 테스트할 수 있습니다! 🚀
