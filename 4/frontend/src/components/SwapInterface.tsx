@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useReadContract } from 'wagmi';
+import { useState, useEffect, useCallback } from 'react';
+import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi';
 
 interface SwapInterfaceProps {
   miniAMMAddress: string;
@@ -46,11 +46,15 @@ const ERC20_ABI = [
 ] as const;
 
 export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: SwapInterfaceProps) {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const [swapDirection, setSwapDirection] = useState<'AtoB' | 'BtoA'>('AtoB');
   const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  
+  // 승인 상태 관리
+  const [approveHash, setApproveHash] = useState<string | null>(null);
+  const [pendingSwapAmount, setPendingSwapAmount] = useState<bigint | null>(null);
   const [estimatedOutput, setEstimatedOutput] = useState<string>('');
   const [feeAmount, setFeeAmount] = useState<string>('');
   const [lastUpdate, setLastUpdate] = useState<string>('');
@@ -66,8 +70,28 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
     functionName: 'getReserves',
   });
 
+  // 토큰 잔액 조회
+  const { data: balanceA } = useReadContract({
+    address: tokenXAddress as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address!],
+  });
+
+  const { data: balanceB } = useReadContract({
+    address: tokenYAddress as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address!],
+  });
+
   const { writeContract: writeSwap, isPending: isSwapPending, isSuccess: isSwapSuccess } = useWriteContract();
   const { writeContract: writeApprove, isPending: isApprovePending } = useWriteContract();
+
+  // 승인 트랜잭션 완료 확인
+  const { data: approveReceipt, isLoading: isApproving } = useWaitForTransactionReceipt({
+    hash: approveHash as `0x${string}`,
+  });
 
   // 갱신 확인을 위한 로그
   useEffect(() => {
@@ -122,6 +146,52 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
     }
   }, [isSwapSuccess]);
 
+  // 승인 완료 후 자동으로 스왑 실행
+  const executeSwapAfterApproval = useCallback(async () => {
+    if (!pendingSwapAmount || !approveReceipt) return;
+
+    // 스왑 시작 시 로딩 상태 설정
+    setIsLoading(true);
+
+    try {
+      console.log('승인 완료. 스왑을 시작합니다...');
+      
+      if (swapDirection === 'AtoB') {
+        await writeSwap({
+          address: miniAMMAddress as `0x${string}`,
+          abi: MINI_AMM_ABI,
+          functionName: 'swap',
+          args: [pendingSwapAmount, BigInt(0)]
+        });
+      } else {
+        await writeSwap({
+          address: miniAMMAddress as `0x${string}`,
+          abi: MINI_AMM_ABI,
+          functionName: 'swap',
+          args: [BigInt(0), pendingSwapAmount]
+        });
+      }
+
+      // 상태 초기화
+      setPendingSwapAmount(null);
+      setApproveHash(null);
+
+    } catch (error) {
+      console.error('스왑 실행 실패:', error);
+      alert(`스왑 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pendingSwapAmount, approveReceipt, swapDirection, miniAMMAddress, writeSwap]);
+
+  // 승인 완료 감지
+  useEffect(() => {
+    if (approveReceipt && pendingSwapAmount && !isLoading) {
+      console.log('승인이 완료되었습니다. 스왑을 시작합니다...');
+      executeSwapAfterApproval();
+    }
+  }, [approveReceipt, pendingSwapAmount, isLoading, executeSwapAfterApproval]);
+
   const handleSwap = async () => {
     if (!isConnected || !amount) return;
 
@@ -129,38 +199,55 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
     try {
       const amountWei = BigInt(parseFloat(amount) * 1e18);
       
-      // Determine which token to approve
+      // 잔액 확인
       const tokenAddress = swapDirection === 'AtoB' ? tokenXAddress : tokenYAddress;
+      const balance = swapDirection === 'AtoB' ? balanceA : balanceB;
+      
+      if (!balance || balance < amountWei) {
+        alert(`잔액이 부족합니다. 현재 잔액: ${balance ? (Number(balance) / 1e18).toFixed(6) : '0'}개`);
+        setIsLoading(false);
+        return;
+      }
+
+      // 유동성 확인
+      if (!reserves || reserves.length < 2 || reserves[0] === BigInt(0) || reserves[1] === BigInt(0)) {
+        alert('유동성이 부족합니다. 먼저 유동성을 공급해주세요.');
+        setIsLoading(false);
+        return;
+      }
+
       const tokenContract = tokenAddress as `0x${string}`;
       const ammContract = miniAMMAddress as `0x${string}`;
 
-      // First approve the AMM to spend tokens
-      await writeApprove({
-        address: tokenContract,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [ammContract, amountWei]
+      // 승인 트랜잭션 전송
+      await new Promise<string>((resolve, reject) => {
+        writeApprove({
+          address: tokenContract,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [ammContract, amountWei]
+        }, {
+          onSuccess: (hash) => {
+            setApproveHash(hash);
+            resolve(hash);
+          },
+          onError: (error) => {
+            alert(`승인 실패: ${error.message}`);
+            reject(error);
+          }
+        });
       });
 
-      // Then execute the swap
-      if (swapDirection === 'AtoB') {
-        await writeSwap({
-          address: ammContract,
-          abi: MINI_AMM_ABI,
-          functionName: 'swap',
-          args: [amountWei, BigInt(0)]
-        });
-      } else {
-        await writeSwap({
-          address: ammContract,
-          abi: MINI_AMM_ABI,
-          functionName: 'swap',
-          args: [BigInt(0), amountWei]
-        });
-      }
+      // 스왑 정보 저장 (승인 완료 후 실행)
+      setPendingSwapAmount(amountWei);
+      console.log('승인 트랜잭션 전송 완료. 승인 완료를 기다리는 중...');
+      
+      // 승인 트랜잭션 전송 완료 후 로딩 상태 해제
+      setIsLoading(false);
+
     } catch (error) {
-      console.error('Swap failed:', error);
-    } finally {
+      console.error('승인 실패:', error);
+      alert(`승인 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsLoading(false);
     }
   };
@@ -266,10 +353,14 @@ export function SwapInterface({ miniAMMAddress, tokenXAddress, tokenYAddress }: 
 
       <button
         onClick={handleSwap}
-        disabled={!amount || isLoading || isSwapPending || isApprovePending}
+        disabled={!amount || isLoading || isSwapPending || isApprovePending || isApproving}
         className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-lg text-lg font-bold hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all duration-200"
       >
-        {isLoading || isSwapPending || isApprovePending ? 'Swapping...' : 'Swap Tokens'}
+        {isLoading ? '처리 중...' : 
+         isApprovePending ? '승인 중...' :
+         isApproving ? '승인 완료 대기 중...' :
+         isSwapPending ? '스왑 중...' : 
+         'Swap Tokens'}
       </button>
 
       {miniAMMAddress === "0x0000000000000000000000000000000000000000" && (

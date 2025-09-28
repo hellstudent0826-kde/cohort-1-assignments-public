@@ -421,17 +421,6 @@ export function SimpleLiquidityInterface({
       <div className="space-y-4">
         {/* Current Liquidity Info */}
         <div className="bg-gray-50 p-4 rounded-lg">
-          <div className="flex justify-end items-center mb-2">
-            <button
-              onClick={() => {
-                refetchReserves();
-                refetchLpBalance();
-              }}
-              className="text-sm text-blue-600 hover:text-blue-800 underline"
-            >
-              🔄 갱신
-            </button>
-          </div>
           <div className="space-y-2">
             {reserves && reserves.length >= 2 ? (
               <>
