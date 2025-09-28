@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi';
 
 interface SimpleLiquidityInterfaceProps {
@@ -79,6 +79,11 @@ export function SimpleLiquidityInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  
+  // 승인 상태 관리
+  const [approveAHash, setApproveAHash] = useState<string | null>(null);
+  const [approveBHash, setApproveBHash] = useState<string | null>(null);
+  const [pendingLiquidityAmounts, setPendingLiquidityAmounts] = useState<{amountA: bigint, amountB: bigint} | null>(null);
 
   const { address, isConnected } = useAccount();
   const { writeContract, isPending, error } = useWriteContract();
@@ -86,6 +91,15 @@ export function SimpleLiquidityInterface({
   // 트랜잭션 상태 확인
   const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash as `0x${string}`,
+  });
+
+  // 승인 트랜잭션 완료 확인
+  const { data: receiptA, isLoading: isApprovingA } = useWaitForTransactionReceipt({
+    hash: approveAHash as `0x${string}`,
+  });
+
+  const { data: receiptB, isLoading: isApprovingB } = useWaitForTransactionReceipt({
+    hash: approveBHash as `0x${string}`,
   });
 
   // Get reserves
@@ -113,6 +127,64 @@ export function SimpleLiquidityInterface({
       setLiquidityMode('initial');
     }
   }, [hasLiquidity, liquidityMode]);
+
+  // 승인 완료 후 유동성 추가 실행
+  const addLiquidityAfterApproval = useCallback(async () => {
+    if (!pendingLiquidityAmounts) return;
+
+    // 유동성 추가 시작 시 로딩 상태 설정
+    setIsLoading(true);
+
+    try {
+      console.log('유동성 추가 시작:', {
+        amountA: pendingLiquidityAmounts.amountA.toString(),
+        amountB: pendingLiquidityAmounts.amountB.toString()
+      });
+
+      writeContract({
+        address: miniAMMAddress as `0x${string}`,
+        abi: MINI_AMM_ABI,
+        functionName: 'addLiquidity',
+        args: [pendingLiquidityAmounts.amountA, pendingLiquidityAmounts.amountB]
+      }, {
+        onSuccess: (hash) => {
+          setTxHash(hash);
+          console.log('유동성 추가 트랜잭션 전송됨:', hash);
+        },
+        onError: (error) => {
+          alert(`유동성 추가 실패: ${error.message}`);
+          console.error('유동성 추가 실패:', error);
+        }
+      });
+
+      // 상태 초기화
+      setPendingLiquidityAmounts(null);
+      setApproveAHash(null);
+      setApproveBHash(null);
+
+      // 입력값 초기화
+      if (liquidityMode === 'initial') {
+        setAmountA('');
+        setAmountB('');
+      } else {
+        setLiquidityPercentage(0);
+      }
+
+    } catch (error) {
+      console.error('유동성 추가 중 오류:', error);
+      alert(`유동성 추가 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pendingLiquidityAmounts, miniAMMAddress, writeContract, liquidityMode]);
+
+  // 승인 완료 후 자동으로 유동성 추가 실행
+  useEffect(() => {
+    if (receiptA && receiptB && pendingLiquidityAmounts && !isLoading) {
+      console.log('두 승인이 모두 완료되었습니다. 유동성 추가를 시작합니다...');
+      addLiquidityAfterApproval();
+    }
+  }, [receiptA, receiptB, pendingLiquidityAmounts, isLoading, addLiquidityAfterApproval]);
 
   // Get LP token address from environment variable
   const lpTokenAddress = process.env.NEXT_PUBLIC_LP_TOKEN_ADDRESS;
@@ -227,7 +299,7 @@ export function SimpleLiquidityInterface({
       }
 
       // Step 1: Approve Token A
-      const approveAHash = await new Promise<string>((resolve, reject) => {
+      await new Promise<string>((resolve, reject) => {
         writeContract({
           address: tokenXAddress as `0x${string}`,
           abi: ERC20_ABI,
@@ -235,6 +307,7 @@ export function SimpleLiquidityInterface({
           args: [miniAMMAddress as `0x${string}`, addAmountAWei]
         }, {
           onSuccess: (hash) => {
+            setApproveAHash(hash);
             setTxHash(hash);
             resolve(hash);
           },
@@ -245,11 +318,8 @@ export function SimpleLiquidityInterface({
         });
       });
 
-      // Wait for Token A approval to be confirmed
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
       // Step 2: Approve Token B
-      const approveBHash = await new Promise<string>((resolve, reject) => {
+      await new Promise<string>((resolve, reject) => {
         writeContract({
           address: tokenYAddress as `0x${string}`,
           abi: ERC20_ABI,
@@ -257,6 +327,7 @@ export function SimpleLiquidityInterface({
           args: [miniAMMAddress as `0x${string}`, addAmountBWei]
         }, {
           onSuccess: (hash) => {
+            setApproveBHash(hash);
             setTxHash(hash);
             resolve(hash);
           },
@@ -267,27 +338,19 @@ export function SimpleLiquidityInterface({
         });
       });
 
-      // Wait for Token B approval to be confirmed
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Step 3: Add liquidity
-      writeContract({
-        address: miniAMMAddress as `0x${string}`,
-        abi: MINI_AMM_ABI,
-        functionName: 'addLiquidity',
-        args: [addAmountAWei, addAmountBWei]
-      }, {
-        onSuccess: (hash) => {
-          setTxHash(hash);
-        },
-        onError: (error) => {
-          alert(`유동성 추가 실패: ${error.message}`);
-        }
+      // Step 3: 승인 완료를 기다리기 위해 유동성 추가 정보 저장
+      setPendingLiquidityAmounts({
+        amountA: addAmountAWei,
+        amountB: addAmountBWei
       });
 
+      console.log('승인 트랜잭션 전송 완료. 승인 완료를 기다리는 중...');
+      
+      // 승인 트랜잭션 전송 완료 후 로딩 상태 해제
+      setIsLoading(false);
+
     } catch (error) {
-      alert(`유동성 추가 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
+      alert(`승인 실패: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsLoading(false);
     }
   };
@@ -678,10 +741,14 @@ export function SimpleLiquidityInterface({
 
           <button
             onClick={handleAddLiquidity}
-            disabled={isLoading || !isMounted || !isConnected || isConfirming || isPending}
+            disabled={isLoading || !isMounted || !isConnected || isConfirming || isPending || isApprovingA || isApprovingB}
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {isLoading ? '처리 중...' : isPending ? '트랜잭션 전송 중...' : isConfirming ? '트랜잭션 확인 중...' : 
+            {isLoading ? '처리 중...' : 
+             isApprovingA ? 'Token A 승인 중...' :
+             isApprovingB ? 'Token B 승인 중...' :
+             isPending ? '트랜잭션 전송 중...' : 
+             isConfirming ? '트랜잭션 확인 중...' : 
              liquidityMode === 'initial' ? '최초 유동성 공급' : '유동성 추가'}
           </button>
           
